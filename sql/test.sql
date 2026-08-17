@@ -1,2 +1,2 @@
-create table `pban-dev-cicd.sample.test` as 
+create table '__GCP_PROJECT_ID__.smaple.test' as 
 	select 1 as id
