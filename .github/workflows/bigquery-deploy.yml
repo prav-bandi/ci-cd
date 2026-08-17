@@ -60,7 +60,8 @@ jobs:
         run: |
           bq version
           gcloud auth list
-          gcloud config set project "${GCP_PROJECT_ID}"
+          echo "Running config set"
+          gcloud config set project "${{ env.GCP_PROJECT_ID }}"
 
       - name: Execute SQL
         run: |
