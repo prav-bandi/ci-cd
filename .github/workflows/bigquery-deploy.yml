@@ -1,23 +1,55 @@
 name: BigQuery Deployment
+
 on:
   push:
     branches:
       - develop
+      - main
+
 jobs:
+
   deploy:
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       id-token: write
+
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      # Determine environment
+      - name: Set environment variables
+        run: |
+
+          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+
+            echo "ENVIRONMENT=PROD" >> $GITHUB_ENV
+            echo "GCP_PROJECT_ID=${{ vars.PROD_GCP_PROJECT_ID }}" >> $GITHUB_ENV
+            echo "GCP_SERVICE_ACCOUNT=${{ vars.PROD_GCP_SERVICE_ACCOUNT }}" >> $GITHUB_ENV
+
+          elif [[ "${GITHUB_REF_NAME}" == "develop" ]]; then
+
+            echo "ENVIRONMENT=DEV" >> $GITHUB_ENV
+            echo "GCP_PROJECT_ID=${{ vars.DEV_GCP_PROJECT_ID }}" >> $GITHUB_ENV
+            echo "GCP_SERVICE_ACCOUNT=${{ vars.DEV_GCP_SERVICE_ACCOUNT }}" >> $GITHUB_ENV
+
+          fi
+
+      - name: Display deployment environment
+        run: |
+          echo "Branch       : ${GITHUB_REF_NAME}"
+          echo "Environment  : ${ENVIRONMENT}"
+          echo "GCP Project  : ${GCP_PROJECT_ID}"
+          echo "Service Account : ${GCP_SERVICE_ACCOUNT}"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_PROVIDER }}
-          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: Setup Google Cloud CLI
         uses: google-github-actions/setup-gcloud@v3
@@ -26,12 +58,27 @@ jobs:
         run: |
           bq version
           gcloud auth list
-          
+          gcloud config set project "${GCP_PROJECT_ID}"
+
       - name: Execute SQL
         run: |
+
           for file in sql/*.sql; do
+
+            echo "======================================"
             echo "Executing $file"
+            echo "Environment: ${ENVIRONMENT}"
+            echo "Project: ${GCP_PROJECT_ID}"
+            echo "======================================"
+
+            # Replace project placeholder
+            sed "s/__GCP_PROJECT_ID__/${GCP_PROJECT_ID}/g" \
+              "$file" > /tmp/$(basename "$file")
+
+            # Execute SQL
             bq query \
               --use_legacy_sql=false \
-              < "$file"
+              --project_id="${GCP_PROJECT_ID}" \
+              < /tmp/$(basename "$file")
+
           done
